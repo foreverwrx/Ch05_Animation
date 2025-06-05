@@ -1,0 +1,364 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script>```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cross-Entropy and Perplexity Animation</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #FFFFFF;
+            color: #000000;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 1000px;
+            width: 100%;
+        }
+        svg {
+            background-color: #F5F5F5;
+            border: 1px solid #808080;
+        }
+        .bar {
+            fill: #1E90FF;
+        }
+        .target-bar {
+            fill: #0000FF;
+        }
+        .text {
+            fill: #000000;
+            font-size: 12px;
+        }
+        .annotation {
+            font-size: 16px;
+            color: #000000;
+            margin: 10px 0;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            background-color: #1E90FF;
+            color: #FFFFFF;
+            border: none;
+            padding: 10px 20px;
+            margin: 0 10px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #104E8B;
+        }
+        .math-formula {
+            font-size: 18px;
+            margin: 20px 0;
+            color: #000000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Cross-Entropy and Perplexity Animation</h1>
+        <div class="controls">
+            <button onclick="startAnimation()">Start Animation</button>
+            <button onclick="resetAnimation()">Reset</button>
+        </div>
+        <div id="chart"></div>
+        <div id="annotation" class="annotation">Click 'Start Animation' to begin.</div>
+        <div id="formula" class="math-formula"></div>
+    </div>
+
+    <script>
+        // SVG dimensions
+        const svgWidth = 700;
+        const svgHeight = 400;
+        const margin = { top: 50, right: 50, bottom: 50, left: 50 };
+        const width = svgWidth - margin.left - margin.right;
+        const height = svgHeight - margin.top - margin.bottom;
+
+        // Sample data: logits for a small vocabulary
+        const logits = [2.5, 1.8, 0.9, 3.2, 0.1];
+        const vocab = ['every', 'effort', 'moves', 'you', 'to'];
+        const targetIndex = 2; // 'moves' is the target word
+
+        // Create SVG
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", svgWidth)
+            .attr("height", svgHeight)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Scales
+        const xScale = d3.scaleBand()
+            .domain(vocab)
+            .range([0, width])
+            .padding(0.1);
+
+        let yScale = d3.scaleLinear()
+            .domain([0, 5])
+            .range([height, 0]);
+
+        // Axes
+        svg.append("g")
+            .attr("class", "x-axis")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(xScale))
+            .selectAll("text")
+            .style("fill", "#000000");
+
+        svg.append("g")
+            .attr("class", "y-axis")
+            .call(d3.axisLeft(yScale))
+            .selectAll("text")
+            .style("fill", "#000000");
+
+        // Initial bars
+        let bars = svg.selectAll(".bar")
+            .data(logits)
+            .enter()
+            .append("rect")
+            .attr("class", "bar")
+            .attr("x", (d, i) => xScale(vocab[i]))
+            .attr("y", d => yScale(d))
+            .attr("width", xScale.bandwidth())
+            .attr("height", d => height - yScale(d));
+
+        // Labels
+        let labels = svg.selectAll(".text")
+            .data(logits)
+            .enter()
+            .append("text")
+            .attr("class", "text")
+            .attr("x", (d, i) => xScale(vocab[i]) + xScale.bandwidth() / 2)
+            .attr("y", d => yScale(d) - 10)
+            .attr("text-anchor", "middle")
+            .text(d => d.toFixed(2));
+
+        // Animation steps
+        function startAnimation() {
+            // Step 1: Show logits
+            d3.select("#annotation").text("Step 1: Display raw logits for each word in the vocabulary.");
+            bars.attr("class", "bar");
+            updateLabels(logits);
+
+            // Step 2: Apply softmax to get probabilities
+            setTimeout(() => {
+                d3.select("#annotation").text("Step 2: Apply softmax to convert logits to probabilities.");
+                d3.select("#formula").html("\\[ \\text{softmax}(x_i) = \\frac{e^{x_i}}{\\sum_j e^{x_j}} \\]");
+                MathJax.Hub.Queue(["Typeset", MathJax.Hub, "formula"]);
+
+                const expLogits = logits.map(d => Math.exp(d));
+                const sumExp = expLogits.reduce((a, b) => a + b, 0);
+                const probabilities = expLogits.map(d => d / sumExp);
+
+                yScale.domain([0, 1]);
+                svg.select(".y-axis")
+                    .transition()
+                    .duration(1000)
+                    .call(d3.axisLeft(yScale));
+
+                bars.transition()
+                    .duration(1000)
+                    .attr("y", (d, i) => yScale(probabilities[i]))
+                    .attr("height", (d, i) => height - yScale(probabilities[i]));
+
+                updateLabels(probabilities);
+            }, 2000);
+
+            // Step 3: Highlight target probability
+            setTimeout(() => {
+                d3.select("#annotation").text("Step 3: Highlight the probability of the target word ('moves').");
+                bars.attr("class", (d, i) => i === targetIndex ? "target-bar" : "bar");
+                updateLabels([probabilities[targetIndex]], [targetIndex]);
+            }, 4000);
+
+            // Step 4: Compute log probability
+            setTimeout(() => {
+                d3.select("#annotation").text("Step 4: Compute log probability for the target word.");
+                d3.select("#formula").html("\\[ \\log(p_i) \\]");
+                MathJax.Hub.Queue(["Typeset", MathJax.Hub, "formula"]);
+
+                const logProb = Math.log(probabilities[targetIndex]);
+                yScale.domain([logProb - 1, 0]);
+                svg.select(".y-axis")
+                    .transition()
+                    .duration(1000)
+                    .call(d3.axisLeft(yScale));
+
+                bars.transition()
+                    .duration(1000)
+                    .attr("y", (d, i) => i === targetIndex ? yScale(logProb) : yScale(-1))
+                    .attr("height", (d, i) => i === targetIndex ? height - yScale(logProb) : 0);
+
+                updateLabels([logProb], [targetIndex]);
+            }, 6000);
+
+            // Step 5: Cross-entropy loss
+            setTimeout(() => {
+                d3.select("#annotation").text("Step 5: Cross-entropy loss is the negative log probability.");
+                d3.select("#formula").html("\\[ \\text{Loss} = -\\log(p_i) \\]");
+                MathJax.Hub.Queue(["Typeset", MathJax.Hub, "formula"]);
+
+                const loss = -logProb;
+                yScale.domain([0, loss + 1]);
+                svg.select(".y-axis")
+                    .transition()
+                    .duration(1000)
+                    .call(d3.axisLeft(yScale));
+
+                bars.transition()
+                    .duration(1000)
+                    .attr("y", (d, i) => i === targetIndex ? yScale(loss) : yScale(0))
+                    .attr("height", (d, i) => i === targetIndex ? height - yScale(loss) : 0);
+
+                updateLabels([loss], [targetIndex]);
+            }, 8000);
+
+            // Step 6: Perplexity
+            setTimeout(() => {
+                d3.select("#annotation").text("Step 6: Perplexity is the exponential of the loss.");
+                d3.select("#formula").html("\\[ \\text{Perplexity} = e^{\\text{Loss}} \\]");
+                MathJax.Hub.Queue(["Typeset", MathJax.Hub, "formula"]);
+
+                const perplexity = Math.exp(loss);
+                yScale.domain([0, perplexity + 100]);
+                svg.select(".y-axis")
+                    .transition()
+                    .duration(1000)
+                    .call(d3.axisLeft(yScale));
+
+                bars.transition()
+                    .duration(1000)
+                    .attr("y", (d, i) => i === targetIndex ? yScale(perplexity) : yScale(0))
+                    .attr("height", (d, i) => i === targetIndex ? height - yScale(perplexity) : 0);
+
+                updateLabels([perplexity], [targetIndex]);
+            }, 10000);
+        }
+
+        function updateLabels(data, indices = d3.range(logits.length)) {
+            svg.selectAll(".text")
+                .filter((d, i) => indices.includes(i))
+                .transition()
+                .duration(1000)
+                .text((d, i) => data[indices.indexOf(i)].toFixed(4))
+                .attr("y", (d, i) => yScale(data[indices.indexOf(i)]) - 10);
+        }
+
+        function resetAnimation() {
+            d3.select("#annotation").text("Click 'Start Animation' to begin.");
+            d3.select("#formula").html("");
+            yScale.domain([0, 5]);
+            svg.select(".y-axis")
+                .transition()
+                .duration(1000)
+                .call(d3.axisLeft(yScale));
+
+            bars.attr("class", "bar")
+                .transition()
+                .duration(1000)
+                .attr("y", d => yScale(d))
+                .attr("height", d => height - yScale(d));
+
+            updateLabels(logits);
+        }
+    </script>
+</body>
+</html>
+```
+
+### Animation Description
+
+1. **Content Overview**:
+   - **Initial State**: Displays a bar chart with logits for a 5-word vocabulary (`every`, `effort`, `moves`, `you`, `to`), with y-axis ranging from 0 to 5.
+   - **Step 1**: Shows raw logits in blue bars (#1E90FF).
+   - **Step 2**: Applies softmax to convert logits to probabilities (y-axis updates to 0–1), updating bar heights and labels.
+   - **Step 3**: Highlights the target word `moves` in dark blue (#0000FF).
+   - **Step 4**: Computes the log probability for the target word, showing only its bar (y-axis updates to negative range).
+   - **Step 5**: Shows cross-entropy loss as the negative log probability (y-axis updates to positive range).
+   - **Step 6**: Computes perplexity (exponential of loss), updating the bar height (y-axis scales to fit large value).
+   - **Formulas**: MathJax renders formulas for softmax, log probability, loss, and perplexity, updating with each step.
+
+2. **Color Scheme**:
+   - **Background**: White (#FFFFFF) for a clean look.
+   - **Bars**: Blue (#1E90FF) for regular bars, dark blue (#0000FF) for the target word.
+   - **Text and Axes**: Black (#000000) for readability.
+   - **SVG Background**: Light gray (#F5F5F5) for contrast.
+   - **Buttons**: Blue (#1E90FF), darkening to #104E8B on hover.
+
+3. **Interactivity**:
+   - **Start Animation**: Triggers the sequence of steps, with each step delayed by 2 seconds for clarity.
+   - **Reset**: Restores the initial logits state and clears annotations/formulas.
+   - **Annotations**: Text updates per step to explain the process.
+   - **Formulas**: MathJax dynamically renders relevant equations.
+
+4. **Technical Details**:
+   - Uses D3.js v7 for bar chart animations with smooth transitions (1000ms).
+   - Logits are simplified from the document example for clarity.
+   - MathJax ensures accurate formula rendering.
+   - Responsive design adjusts to different screen sizes.
+
+### Usage Instructions
+
+1. **Running the Animation**:
+   - Save the code as `index.html` and open it in a browser.
+   - Requires internet access to load D3.js and MathJax via CDN. For offline use, download these libraries and host locally.
+   - Click "Start Animation" to run through the steps, or "Reset" to return to the initial state.
+
+2. **Dependencies**:
+   - D3.js v7 (`https://d3js.org/d3.v7.min.js`)
+   - MathJax (`https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML`)
+
+3. **Customization**:
+   - **Adjust Logits**: Modify the `logits` array in the script to experiment with different values.
+   - **Add Interactivity**: Include sliders for logits values using D3.js controls to allow real-time adjustments.
+   - **Export Option**: Add a button to record the animation as a GIF using libraries like CCapture.js.
+
+This animation provides a clear, visual explanation of cross-entropy loss and perplexity, tailored for beginners, with a professional blue, black, white, and gray color scheme. It aligns with the document's educational goals and simplifies complex concepts through dynamic visualization.
