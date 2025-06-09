@@ -1,0 +1,299 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Top-k and Temperature Sampling Animation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        #container {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        #chart-container {
+            width: 500px;
+            height: 300px;
+            max-width: 100%;
+        }
+        #p5-canvas-container {
+            width: 300px;
+            height: 300px;
+            max-width: 100%;
+            background-color: #fff;
+            border: 2px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #controls {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+        #output {
+            margin-top: 20px;
+            font-size: 16px;
+            max-width: 500px;
+            text-align: center;
+        }
+        .slider-container {
+            margin: 10px 0;
+        }
+        @media (max-width: 600px) {
+            #container {
+                flex-direction: column;
+                align-items: center;
+            }
+            #chart-container, #p5-canvas-container {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Control Text Generation: Top-k and Temperature Sampling</h1>
+    <div id="container">
+        <div id="chart-container">
+            <canvas id="logitsChart"></canvas>
+        </div>
+        <div id="p5-canvas-container">
+            <canvas id="p5-canvas"></canvas>
+        </div>
+    </div>
+    <div id="controls">
+        <div class="slider-container">
+            <label for="k-slider">Top-k (k): </label>
+            <input type="range" id="k-slider" min="1" max="9" value="3">
+            <span id="k-value">3</span>
+        </div>
+        <div class="slider-container">
+            <label for="temp-slider">Temperature: </label>
+            <input type="range" id="temp-slider" min="0.1" max="2.0" step="0.1" value="1.0">
+            <span id="temp-value">1.0</span>
+        </div>
+    </div>
+    <div id="output">
+        <p><strong>Generated Text:</strong> <span id="generated-text">Every effort moves you...</span></p>
+    </div>
+
+    <script>
+        let logits = [2.0, 1.5, 3.0, 0.5, 1.0, 2.5, 0.8, 1.2, 0.3]; // Example logits
+        let k = 3;
+        let temperature = 1.0;
+        let chart;
+        let animationState = 'initial';
+        let animationFrame = 0;
+        let selectedToken = null;
+
+        // Sample vocabulary for text generation
+        const vocab = ['Every', 'effort', 'moves', 'you', 'towards', 'greatness', 'with', 'purpose', 'always'];
+        const textOutputs = {
+            lowTemp: ['Every effort moves you closer.', 'Every effort moves you forward.'],
+            highTemp: ['Every purpose moves greatness!', 'You effort with always towards!']
+        };
+
+        // p5.js setup
+        function setup() {
+            let canvas = createCanvas(300, 300);
+            canvas.parent('p5-canvas-container');
+            textAlign(CENTER, CENTER);
+            textSize(16);
+        }
+
+        function draw() {
+            background(255);
+            if (animationState === 'sampling') {
+                // Simulate random dice roll for sampling
+                fill(255, 165, 0);
+                ellipse(width / 2, height / 2, 50, 50);
+                fill(0);
+                text('Rolling...', width / 2, height / 2 - 60);
+                if (selectedToken !== null) {
+                    text(`Selected: ${vocab[selectedToken]}`, width / 2, height / 2 + 60);
+                }
+                animationFrame++;
+                if (animationFrame > 60) {
+                    animationState = 'done';
+                    updateTextOutput();
+                }
+            } else if (animationState === 'done') {
+                fill(0, 128, 0);
+                ellipse(width / 2, height / 2, 50, 50);
+                fill(255);
+                text('Done', width / 2, height / 2);
+                if (selectedToken !== null) {
+                    fill(0);
+                    text(`Selected: ${vocab[selectedToken]}`, width / 2, height / 2 + 60);
+                }
+            } else {
+                fill(200);
+                ellipse(width / 2, height / 2, 50, 50);
+                fill(0);
+                text('Click to Sample', width / 2, height / 2);
+            }
+        }
+
+        function mousePressed() {
+            // Ensure clicks are within canvas bounds
+            if (mouseX >= 0 && mouseX <= width && mouseY >= 0 && mouseY <= height && animationState !== 'sampling') {
+                animationState = 'sampling';
+                animationFrame = 0;
+                // Simulate torch.multinomial
+                let probas = computeProbabilities();
+                let sum = probas.reduce((a, b) => a + b, 0);
+                probas = probas.map(p => p / sum);
+                let r = random();
+                let cumulative = 0;
+                selectedToken = null;
+                for (let i = 0; i < probas.length; i++) {
+                    cumulative += probas[i];
+                    if (r <= cumulative) {
+                        selectedToken = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Chart.js setup
+        window.onload = function() {
+            const ctx = document.getElementById('logitsChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: vocab,
+                    datasets: [{
+                        label: 'Logits / Probabilities',
+                        data: logits,
+                        backgroundColor: Array(9).fill('rgba(54, 162, 235, 0.5)'),
+                        borderColor: Array(9).fill('rgba(54, 162, 235, 1)'),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Value' }
+                        },
+                        x: {
+                            title: { display: true, text: 'Tokens' }
+                        }
+                    },
+                    animation: {
+                        duration: 500
+                    }
+                }
+            });
+
+            // Slider event listeners
+            document.getElementById('k-slider').addEventListener('input', function() {
+                k = parseInt(this.value);
+                document.getElementById('k-value').textContent = k;
+                updateChart();
+            });
+
+            document.getElementById('temp-slider').addEventListener('input', function() {
+                temperature = parseFloat(this.value);
+                document.getElementById('temp-value').textContent = temperature.toFixed(1);
+                updateChart();
+            });
+
+            updateChart();
+        };
+
+        function computeProbabilities() {
+            // Apply temperature
+            let scaledLogits = logits.map(l => l / temperature);
+            // Apply Top-k
+            let sortedIndices = scaledLogits.map((val, idx) => ({ val, idx }))
+                .sort((a, b) => b.val - a.val)
+                .map(item => item.idx);
+            let topKIndices = sortedIndices.slice(0, k);
+            let probas = scaledLogits.map((_, i) => topKIndices.includes(i) ? Math.exp(scaledLogits[i]) : 0);
+            return probas;
+        }
+
+        function updateChart() {
+            let probas = computeProbabilities();
+            let colors = logits.map((_, i) => probas[i] > 0 ? 'rgba(54, 162, 235, 0.5)' : 'rgba(200, 200, 200, 0.5)');
+            let borderColors = logits.map((_, i) => probas[i] > 0 ? 'rgba(54, 162, 235, 1)' : 'rgba(200, 200, 200, 1)');
+            chart.data.datasets[0].data = probas;
+            chart.data.datasets[0].backgroundColor = colors;
+            chart.data.datasets[0].borderColor = borderColors;
+            chart.data.labels = vocab;
+            chart.update();
+            animationState = 'initial';
+            selectedToken = null;
+        }
+
+        function updateTextOutput() {
+            let text;
+            if (temperature <= 0.5) {
+                text = textOutputs.lowTemp[Math.floor(Math.random() * textOutputs.lowTemp.length)];
+            } else {
+                text = textOutputs.highTemp[Math.floor(Math.random() * textOutputs.highTemp.length)];
+            }
+            document.getElementById('generated-text').textContent = text;
+        }
+    </script>
+</body>
+</html>

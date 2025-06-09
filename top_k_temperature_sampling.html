@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Top-k 与温度采样演示</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f9fafb;
+      padding: 20px;
+    }
+    h1, h2 {
+      text-align: center;
+    }
+    .controls {
+      text-align: center;
+      margin: 20px 0;
+    }
+    .controls input {
+      margin: 0 10px;
+    }
+    .bar-chart {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      height: 200px;
+      margin: 20px;
+    }
+    .bar {
+      width: 30px;
+      margin: 0 5px;
+      background-color: #60a5fa;
+      transition: height 0.5s, background-color 0.5s;
+    }
+    .bar.dimmed {
+      background-color: #d1d5db;
+    }
+    .output {
+      text-align: center;
+      font-size: 18px;
+      margin-top: 20px;
+    }
+    .dice {
+      font-size: 36px;
+      text-align: center;
+      animation: shake 0.5s infinite alternate;
+    }
+    @keyframes shake {
+      0% { transform: rotate(-5deg); }
+      100% { transform: rotate(5deg); }
+    }
+  </style>
+</head>
+<body>
+  <h1>控制文本生成的魔法旋钮</h1>
+  <div class="controls">
+    <label>Top-k:
+      <input type="range" id="topk" min="1" max="9" value="3">
+      <span id="topkVal">3</span>
+    </label>
+    <label>温度:
+      <input type="range" id="temperature" min="0.1" max="2.0" step="0.1" value="1">
+      <span id="tempVal">1.0</span>
+    </label>
+    <button onclick="sampleToken()">采样生成</button>
+  </div>
+
+  <h2>Logits 分布</h2>
+  <div class="bar-chart" id="chart"></div>
+
+  <div class="dice" id="dice">🎲</div>
+  <div class="output" id="outputText"></div>
+
+  <script>
+    const chart = document.getElementById("chart");
+    const dice = document.getElementById("dice");
+    const outputText = document.getElementById("outputText");
+    const logits = [2.1, 1.8, 0.5, 2.5, 1.2, 3.2, 0.9, 0.4, 2.7];
+
+    const tokens = ["Every", "step", "moves", "you", "closer", "to", "the", "goal", "today"];
+
+    function softmax(logits, temp=1.0) {
+      const scaled = logits.map(x => x / temp);
+      const maxLogit = Math.max(...scaled);
+      const exps = scaled.map(x => Math.exp(x - maxLogit));
+      const sum = exps.reduce((a, b) => a + b);
+      return exps.map(x => x / sum);
+    }
+
+    function updateChart(topk=3, temperature=1.0) {
+      chart.innerHTML = "";
+      const tempLogits = [...logits];
+      const topkIndices = [...tempLogits]
+        .map((v, i) => [v, i])
+        .sort((a, b) => b[0] - a[0])
+        .slice(0, topk)
+        .map(x => x[1]);
+
+      const filtered = tempLogits.map((v, i) => topkIndices.includes(i) ? v : -Infinity);
+      const probs = softmax(filtered, temperature);
+
+      for (let i = 0; i < logits.length; i++) {
+        const bar = document.createElement("div");
+        bar.className = "bar" + (topkIndices.includes(i) ? "" : " dimmed");
+        bar.style.height = `${probs[i] * 200}px`;
+        bar.title = `${tokens[i]}\n${(probs[i] * 100).toFixed(1)}%`;
+        chart.appendChild(bar);
+      }
+    }
+
+    function sampleToken() {
+      const topk = parseInt(document.getElementById("topk").value);
+      const temp = parseFloat(document.getElementById("temperature").value);
+
+      updateChart(topk, temp);
+
+      const topkIndices = logits
+        .map((v, i) => [v, i])
+        .sort((a, b) => b[0] - a[0])
+        .slice(0, topk)
+        .map(x => x[1]);
+
+      const filtered = logits.map((v, i) => topkIndices.includes(i) ? v : -Infinity);
+      const probs = softmax(filtered, temp);
+
+      const rnd = Math.random();
+      let sum = 0;
+      for (let i = 0; i < probs.length; i++) {
+        sum += probs[i];
+        if (rnd < sum) {
+          outputText.innerHTML = `<p>采样结果：<b>${tokens[i]}</b></p>`;
+          dice.textContent = "🎲";
+          break;
+        }
+      }
+    }
+
+    document.getElementById("topk").addEventListener("input", (e) => {
+      document.getElementById("topkVal").textContent = e.target.value;
+      updateChart(parseInt(e.target.value), parseFloat(document.getElementById("temperature").value));
+    });
+
+    document.getElementById("temperature").addEventListener("input", (e) => {
+      document.getElementById("tempVal").textContent = e.target.value;
+      updateChart(parseInt(document.getElementById("topk").value), parseFloat(e.target.value));
+    });
+
+    updateChart();
+  </script>
+</body>
+</html>

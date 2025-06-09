@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>模型超参数仪表盘</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f4f8;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+    }
+    .dashboard {
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .control {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      width: 300px;
+    }
+    .control label {
+      display: block;
+      margin-top: 15px;
+      font-weight: bold;
+    }
+    .memory-bar, .qkv-visual, .model-stack, .output-box {
+      margin-top: 20px;
+      background: #e9ecef;
+      border-radius: 8px;
+      padding: 15px;
+    }
+    .memory-bar-inner {
+      height: 20px;
+      background: #4caf50;
+      width: 10%;
+      transition: width 0.5s;
+    }
+    .tokens {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 10px;
+    }
+    .token {
+      background: #007bff;
+      color: white;
+      padding: 5px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .layer, .head {
+      background: #6c757d;
+      color: white;
+      margin: 2px;
+      padding: 4px 6px;
+      display: inline-block;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>模型超参数仪表盘</h1>
+  <div class="dashboard">
+    <div class="control">
+      <label for="context">上下文长度 (context_length): <span id="context-val">256</span></label>
+      <input type="range" id="context" min="128" max="2048" step="128" value="256">
+      <div class="memory-bar">
+        <div class="memory-bar-inner" id="memoryBar"></div>
+      </div>
+      <div class="tokens" id="tokenView"></div>
+    </div>
+
+    <div class="control">
+      <label for="qkv">QKV偏置: <span id="qkv-val">False</span></label>
+      <input type="checkbox" id="qkv">
+      <div class="qkv-visual" id="qkvBox">无偏置</div>
+    </div>
+
+    <div class="control">
+      <label>模型对比:</label>
+      <button onclick="updateModel('small')">GPT2-Small</button>
+      <button onclick="updateModel('medium')">GPT2-Medium</button>
+      <div class="model-stack" id="modelStack"></div>
+    </div>
+
+    <div class="control">
+      <label>文本生成预览:</label>
+      <div class="output-box" id="textPreview">小模型生成的文本。</div>
+    </div>
+  </div>
+
+  <script>
+    const contextSlider = document.getElementById('context');
+    const contextVal = document.getElementById('context-val');
+    const memoryBar = document.getElementById('memoryBar');
+    const tokenView = document.getElementById('tokenView');
+    const qkvCheckbox = document.getElementById('qkv');
+    const qkvVal = document.getElementById('qkv-val');
+    const qkvBox = document.getElementById('qkvBox');
+    const modelStack = document.getElementById('modelStack');
+    const textPreview = document.getElementById('textPreview');
+
+    contextSlider.oninput = function () {
+      contextVal.textContent = this.value;
+      memoryBar.style.width = Math.min(this.value / 20, 100) + '%';
+      renderTokens(this.value);
+      textPreview.textContent = `当前上下文长度为 ${this.value}，生成的文本更连贯。`;
+    };
+
+    function renderTokens(length) {
+      tokenView.innerHTML = '';
+      let tokenCount = Math.floor(length / 128);
+      for (let i = 0; i < tokenCount; i++) {
+        let token = document.createElement('div');
+        token.className = 'token';
+        token.innerText = 'Token';
+        tokenView.appendChild(token);
+      }
+    }
+
+    qkvCheckbox.onchange = function () {
+      qkvVal.textContent = this.checked;
+      qkvBox.textContent = this.checked ? '添加了偏置向量，增强学习能力' : '无偏置';
+      textPreview.textContent = this.checked ? '偏置增强了注意力机制的表现。' : '注意力机制无偏置。';
+    };
+
+    function updateModel(type) {
+      modelStack.innerHTML = '';
+      let layers = type === 'small' ? 12 : 24;
+      let heads = type === 'small' ? 12 : 16;
+
+      for (let i = 0; i < layers; i++) {
+        let layer = document.createElement('div');
+        layer.className = 'layer';
+        layer.innerText = 'Layer';
+        modelStack.appendChild(layer);
+      }
+
+      for (let j = 0; j < heads; j++) {
+        let head = document.createElement('div');
+        head.className = 'head';
+        head.innerText = 'Head';
+        modelStack.appendChild(head);
+      }
+
+      textPreview.textContent = type === 'small'
+        ? '小模型生成简洁文本。'
+        : '大模型生成更复杂、连贯的文本。';
+    }
+
+    // 初始化状态
+    renderTokens(256);
+    updateModel('small');
+  </script>
+</body>
+</html>

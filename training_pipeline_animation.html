@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>模型训练流水线动画</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6fa;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-gap: 20px;
+      justify-items: center;
+    }
+    .block {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      width: 250px;
+      text-align: center;
+    }
+    .data-flow, .transformer-flow, .loss-gauge, .optimizer-visual {
+      margin-top: 20px;
+      background: #e0e7ff;
+      border-radius: 8px;
+      padding: 10px;
+      transition: all 0.3s ease;
+    }
+    .arrow {
+      font-size: 24px;
+      text-align: center;
+    }
+    .bar {
+      height: 20px;
+      width: 100%;
+      background: #ccc;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .bar-fill {
+      height: 100%;
+      width: 0;
+      background: #4caf50;
+      transition: width 0.5s;
+    }
+    .controls {
+      margin-top: 30px;
+      text-align: center;
+    }
+    input[type=range] {
+      width: 200px;
+    }
+  </style>
+</head>
+<body>
+  <h1>模型训练的流水线</h1>
+  <div class="pipeline">
+    <div class="block">
+      <h3>数据流</h3>
+      <div class="data-flow" id="dataFlow">文本 → Token IDs → Inputs/Targets</div>
+    </div>
+
+    <div class="block">
+      <h3>前向传播</h3>
+      <div class="transformer-flow" id="forwardFlow">嵌入层 → 注意力层 → 前馈层 → Logits</div>
+    </div>
+
+    <div class="block">
+      <h3>损失计算</h3>
+      <div class="loss-gauge">
+        损失值: <span id="lossValue">1.0</span>
+        <div class="bar">
+          <div class="bar-fill" id="lossBar"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="block">
+      <h3>梯度更新</h3>
+      <div class="optimizer-visual" id="optimizerBox">AdamW: 使用动量和学习率优化权重</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <label>学习率: <span id="lrVal">0.01</span>
+      <input type="range" id="lr" min="0.001" max="0.1" step="0.001" value="0.01">
+    </label>
+    <br>
+    <label>批量大小: <span id="bsVal">32</span>
+      <input type="range" id="batch" min="8" max="128" step="8" value="32">
+    </label>
+    <br><br>
+    <button onclick="startTraining()">开始训练</button>
+  </div>
+
+  <script>
+    const lossValue = document.getElementById('lossValue');
+    const lossBar = document.getElementById('lossBar');
+    const lrSlider = document.getElementById('lr');
+    const bsSlider = document.getElementById('batch');
+    const lrVal = document.getElementById('lrVal');
+    const bsVal = document.getElementById('bsVal');
+    const dataFlow = document.getElementById('dataFlow');
+    const forwardFlow = document.getElementById('forwardFlow');
+    const optimizerBox = document.getElementById('optimizerBox');
+
+    let step = 0;
+    let trainingInterval;
+
+    lrSlider.oninput = () => lrVal.textContent = lrSlider.value;
+    bsSlider.oninput = () => bsVal.textContent = bsSlider.value;
+
+    function startTraining() {
+      clearInterval(trainingInterval);
+      step = 0;
+      trainingInterval = setInterval(() => {
+        step++;
+
+        const lr = parseFloat(lrSlider.value);
+        const bs = parseInt(bsSlider.value);
+        const loss = Math.max(0.05, 1.0 * Math.exp(-0.2 * step) * (32 / bs) * (0.01 / lr));
+
+        lossValue.textContent = loss.toFixed(3);
+        lossBar.style.width = `${Math.min(100, (1.0 - loss) * 100)}%`;
+
+        dataFlow.textContent = `Epoch ${step}: 文本 → Token IDs → Inputs/Targets`;
+        forwardFlow.textContent = `→ 嵌入层 → 注意力层 → 前馈层 → Logits (Step ${step})`;
+        optimizerBox.textContent = `使用AdamW优化权重 (学习率 ${lr}, 批量大小 ${bs})`;
+
+        if (step >= 20) clearInterval(trainingInterval);
+      }, 500);
+    }
+  </script>
+</body>
+</html>

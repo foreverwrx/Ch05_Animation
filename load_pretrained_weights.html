@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>预训练权重加载动画</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f3f4f6;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+    }
+    .models {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 30px;
+    }
+    .model-box {
+      width: 40%;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      padding: 15px;
+    }
+    .component {
+      padding: 5px 10px;
+      border-radius: 6px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+    .highlight {
+      background-color: #dbeafe;
+    }
+    .arrow {
+      text-align: center;
+      font-size: 24px;
+      margin: 10px 0;
+    }
+    .mapping-log {
+      background: #e0f2fe;
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 20px;
+      font-size: 14px;
+      height: 120px;
+      overflow-y: auto;
+    }
+    .controls {
+      text-align: center;
+      margin-top: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      background: #3b82f6;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .output-box {
+      margin-top: 30px;
+      text-align: center;
+      font-size: 16px;
+    }
+    .success {
+      color: green;
+      font-weight: bold;
+      animation: fadeIn 1s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <h1>从 OpenAI 到 PyTorch 的权重搬运工</h1>
+  <div class="controls">
+    <label>选择模型大小:
+      <select id="modelSize">
+        <option value="124M">GPT-2 (124M)</option>
+        <option value="355M">GPT-2 Medium (355M)</option>
+      </select>
+    </label>
+    <button onclick="startMapping()">加载权重</button>
+  </div>
+
+  <div class="models">
+    <div class="model-box" id="openaiModel">
+      <h3>OpenAI 模型 (TF)</h3>
+      <div class="component highlight">params["wte"]</div>
+      <div class="component highlight">params["wpe"]</div>
+      <div class="component highlight">params["h"].c_attn</div>
+      <div class="component highlight">params["h"].ln_1</div>
+    </div>
+    <div class="model-box" id="pytorchModel">
+      <h3>自定义 PyTorch 模型</h3>
+      <div class="component highlight">gpt.tok_emb.weight</div>
+      <div class="component highlight">gpt.pos_emb</div>
+      <div class="component highlight">W_query, W_key, W_value</div>
+      <div class="component highlight">LayerNorm.gamma</div>
+    </div>
+  </div>
+
+  <div class="arrow">⇆ 权重映射动画中...</div>
+  <div class="mapping-log" id="logBox"></div>
+
+  <div class="output-box" id="outputBox"></div>
+
+  <script>
+    const logBox = document.getElementById("logBox");
+    const outputBox = document.getElementById("outputBox");
+
+    const mappings = [
+      { from: 'params["wte"]', to: 'gpt.tok_emb.weight' },
+      { from: 'params["wpe"]', to: 'gpt.pos_emb' },
+      { from: 'params["h"].c_attn → QKV 拆分', to: 'W_query, W_key, W_value' },
+      { from: 'params["h"].ln_1', to: 'LayerNorm.gamma' }
+    ];
+
+    function logMapping(from, to) {
+      const entry = document.createElement('div');
+      entry.textContent = `${from} → ${to}`;
+      logBox.appendChild(entry);
+    }
+
+    function startMapping() {
+      logBox.innerHTML = "";
+      outputBox.innerHTML = "";
+      let i = 0;
+      const size = document.getElementById("modelSize").value;
+      const interval = setInterval(() => {
+        if (i < mappings.length) {
+          logMapping(mappings[i].from, mappings[i].to);
+          i++;
+        } else {
+          clearInterval(interval);
+          outputBox.innerHTML = `<p class='success'>✓ ${size} 模型权重加载成功！</p><p><i>Every effort moves you toward...</i></p>`;
+        }
+      }, 1000);
+    }
+  </script>
+</body>
+</html>

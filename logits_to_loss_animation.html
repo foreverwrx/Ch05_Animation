@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>从Logits到损失的旅程</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f4f4f8;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .section {
+      margin-bottom: 40px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+    .bar {
+      height: 20px;
+      background-color: #4caf50;
+      margin: 2px 0;
+      transition: width 0.5s;
+    }
+    .logits, .softmax {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      align-items: flex-end;
+      height: 200px;
+    }
+    .bar-container {
+      width: 30px;
+      background: #ddd;
+      display: flex;
+      align-items: flex-end;
+    }
+    .highlight {
+      background-color: #ffcccb;
+    }
+    .dial {
+      font-size: 24px;
+      color: #333;
+      text-align: center;
+    }
+    .circle {
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: #87cefa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin: auto;
+    }
+    input, button {
+      padding: 8px;
+      margin-top: 10px;
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>从Logits到损失的旅程</h1>
+
+  <div class="section">
+    <h2>1. 输入与目标</h2>
+    <input type="text" id="input-sentence" value="Every effort moves you" />
+    <button id="play">Play</button>
+    <button id="pause">Pause</button>
+    <table id="token-table">
+      <tr><th>Token</th><th>ID</th><th>Target ID</th></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>2. Logits 生成</h2>
+    <div class="logits" id="logits"></div>
+  </div>
+
+  <div class="section">
+    <h2>3. Softmax 概率分布</h2>
+    <div class="softmax" id="softmax"></div>
+  </div>
+
+  <div class="section">
+    <h2>4. 目标概率提取与对数</h2>
+    <p>目标概率: <span id="target-proba">-</span></p>
+    <p>log(目标概率): <span id="log-proba">-</span></p>
+  </div>
+
+  <div class="section">
+    <h2>5. 交叉熵损失</h2>
+    <div class="dial">损失值: <span id="loss">-</span></div>
+  </div>
+
+  <div class="section">
+    <h2>6. 困惑度</h2>
+    <div class="circle" id="perplexity">-</div>
+  </div>
+
+  <script>
+    function softmax(arr) {
+      const max = Math.max(...arr);
+      const exps = arr.map(x => Math.exp(x - max));
+      const sum = exps.reduce((a, b) => a + b, 0);
+      return exps.map(e => e / sum);
+    }
+
+    function generateFakeLogits(vocabSize) {
+      return Array.from({ length: vocabSize }, () => Math.random() * 5);
+    }
+
+    function updateTable(tokens) {
+      const table = document.getElementById("token-table");
+      table.innerHTML = '<tr><th>Token</th><th>ID</th><th>Target ID</th></tr>';
+      for (let i = 0; i < tokens.length; i++) {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${tokens[i]}</td><td>${16800 + i}</td><td>${16800 + i + 1}</td>`;
+        table.appendChild(row);
+      }
+    }
+
+    function renderBars(containerId, data, highlightIndex = -1) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = "";
+      const max = Math.max(...data);
+      data.forEach((val, i) => {
+        const bar = document.createElement("div");
+        bar.className = "bar-container";
+        const inner = document.createElement("div");
+        inner.className = "bar";
+        if (i === highlightIndex) inner.classList.add("highlight");
+        inner.style.height = `${(val / max) * 100}%`;
+        bar.appendChild(inner);
+        container.appendChild(bar);
+      });
+    }
+
+    function updateVisuals(tokens) {
+      const vocabSize = 6;
+      const targetIndex = 4;
+      const logits = generateFakeLogits(vocabSize);
+      const probas = softmax(logits);
+      const targetProba = probas[targetIndex];
+      const logProba = Math.log(targetProba);
+      const loss = -logProba;
+      const perplexity = Math.exp(loss);
+
+      renderBars("logits", logits, targetIndex);
+      renderBars("softmax", probas, targetIndex);
+
+      document.getElementById("target-proba").textContent = targetProba.toFixed(6);
+      document.getElementById("log-proba").textContent = logProba.toFixed(4);
+      document.getElementById("loss").textContent = loss.toFixed(4);
+      document.getElementById("perplexity").textContent = Math.round(perplexity);
+    }
+
+    document.getElementById("input-sentence").addEventListener("input", (e) => {
+      const tokens = e.target.value.trim().split(/\s+/);
+      updateTable(tokens);
+      updateVisuals(tokens);
+    });
+
+    let animationInterval = null;
+
+    document.getElementById("play").addEventListener("click", () => {
+      if (animationInterval) return;
+      animationInterval = setInterval(() => {
+        const tokens = document.getElementById("input-sentence").value.trim().split(/\s+/);
+        updateVisuals(tokens);
+      }, 1000);
+    });
+
+    document.getElementById("pause").addEventListener("click", () => {
+      clearInterval(animationInterval);
+      animationInterval = null;
+    });
+
+    // 初始渲染
+    const initialTokens = document.getElementById("input-sentence").value.trim().split(/\s+/);
+    updateTable(initialTokens);
+    updateVisuals(initialTokens);
+  </script>
+</body>
+</html>
